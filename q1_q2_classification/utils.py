@@ -45,7 +45,7 @@ class ARGS(object):
     # set this to value >0 if you wish to save every x epochs
     save_freq=-1
     # set true if using GPU during training
-    use_cuda = False
+    use_cuda = True
     # input size
     inp_size = 224
 
@@ -78,7 +78,7 @@ def get_data_loader(name='voc', train=True, batch_size=64, split='train', inp_si
         dataset,
         batch_size=batch_size,
         shuffle=train,
-        num_workers=4,
+        num_workers=2,
     )
     return loader
 

@@ -53,7 +53,9 @@ def train(args, model, optimizer, scheduler=None, model_name='model'):
             # Function Outputs:
             #   - `output`: Computed loss, a single floating point number
             ##################################################################
-            loss = 0
+            eps = 1e-10
+            output = np.clamp(output, eps, 1-eps)
+            loss = np.mean(-wgt * (target * np.log(output) + (1-target) * np.log(1-output)))
             ##################################################################
             #                          END OF YOUR CODE                      #
             ##################################################################
@@ -65,9 +67,9 @@ def train(args, model, optimizer, scheduler=None, model_name='model'):
                 print('Train Epoch: {} [{} ({:.0f}%)]\tLoss: {:.6f}'.format(epoch, cnt, 100. * batch_idx / len(train_loader), loss.item()))
                 
                 # Log gradients
-                for tag, value in model.named_parameters():
-                    if value.grad is not None:
-                        writer.add_histogram(tag + "/grad", value.grad.cpu().numpy(), cnt)
+                # for tag, value in model.named_parameters():
+                #     if value.grad is not None:
+                #         writer.add_histogram(tag + "/grad", value.grad.cpu().numpy(), cnt)
 
             optimizer.step()
             
