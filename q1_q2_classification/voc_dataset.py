@@ -104,8 +104,8 @@ class VOCDataset(Dataset):
         ######################################################################
         augmentations = [
             transforms.CenterCrop(self.size),
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomRotation(15)
+            # transforms.RandomHorizontalFlip(),
+            # transforms.RandomRotation(15)
         ]
 
         return augmentations

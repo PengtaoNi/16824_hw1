@@ -2,7 +2,7 @@ from __future__ import print_function
 
 import torch
 import numpy as np
-from torch.utils.tensorboard import SummaryWriter
+import wandb
 import utils
 from voc_dataset import VOCDataset
 
@@ -23,7 +23,14 @@ def save_model(epoch, model_name, model):
 
 
 def train(args, model, optimizer, scheduler=None, model_name='model'):
-    writer = SummaryWriter()
+    wandb.login(key="67e677676d60bdb2e9b198f36f6b1f34f9c565de")
+    run = wandb.init(
+        name = model_name,
+        reinit = True,
+        project = "16824_hw1",
+        config = args
+    )
+    
     train_loader = utils.get_data_loader(
         'voc', train=True, batch_size=args.batch_size, split='trainval', inp_size=args.inp_size)
     test_loader = utils.get_data_loader(
@@ -36,6 +43,8 @@ def train(args, model, optimizer, scheduler=None, model_name='model'):
     cnt = 0
 
     for epoch in range(args.epochs):
+        total_loss = 0
+
         for batch_idx, (data, target, wgt) in enumerate(train_loader):
             data, target, wgt = data.to(args.device), target.to(args.device), wgt.to(args.device)
 
@@ -54,42 +63,60 @@ def train(args, model, optimizer, scheduler=None, model_name='model'):
             #   - `output`: Computed loss, a single floating point number
             ##################################################################
             eps = 1e-10
-            output = np.clamp(output, eps, 1-eps)
-            loss = np.mean(-wgt * (target * np.log(output) + (1-target) * np.log(1-output)))
+            sigmoid = 1 / (1 + torch.exp(-output))
+            sigmoid = torch.clamp(sigmoid, eps, 1-eps)
+            loss = -torch.mean(target * torch.log(sigmoid) + (1-target) * torch.log(1-sigmoid))
+            total_loss += float(loss.item())
             ##################################################################
             #                          END OF YOUR CODE                      #
             ##################################################################
             
             loss.backward()
-            
-            if cnt % args.log_every == 0:
-                writer.add_scalar("Loss/train", loss.item(), cnt)
-                print('Train Epoch: {} [{} ({:.0f}%)]\tLoss: {:.6f}'.format(epoch, cnt, 100. * batch_idx / len(train_loader), loss.item()))
-                
-                # Log gradients
-                # for tag, value in model.named_parameters():
-                #     if value.grad is not None:
-                #         writer.add_histogram(tag + "/grad", value.grad.cpu().numpy(), cnt)
-
             optimizer.step()
             
-            # Validation iteration
-            if cnt % args.val_every == 0:
-                model.eval()
-                ap, map = utils.eval_dataset_map(model, args.device, test_loader)
-                print("map: ", map)
-                writer.add_scalar("map", map, cnt)
-                model.train()
-            
-            cnt += 1
+        #     if cnt % args.log_every == 0:
+        #         writer.add_scalar("Loss/train", loss.item(), cnt)
+        #         print('Train Epoch: {} [{} ({:.0f}%)]\tLoss: {:.6f}'.format(epoch, cnt, 100. * batch_idx / len(train_loader), loss.item()))
+                
+        #         # Log gradients
+        #         for tag, value in model.named_parameters():
+        #             if value.grad is not None:
+        #                 writer.add_histogram(tag + "/grad", value.grad.cpu().numpy(), cnt)
 
-        if scheduler is not None:
-            scheduler.step()
-            writer.add_scalar("learning_rate", scheduler.get_last_lr()[0], cnt)
+        #     optimizer.step()
+            
+        #     # Validation iteration
+        #     if cnt % args.val_every == 0:
+        #         model.eval()
+        #         ap, map = utils.eval_dataset_map(model, args.device, test_loader)
+        #         print("map: ", map)
+        #         writer.add_scalar("map", map, cnt)
+        #         model.train()
+            
+        #     cnt += 1
+
+        # if scheduler is not None:
+        #     scheduler.step()
+        #     writer.add_scalar("learning_rate", scheduler.get_last_lr()[0], cnt)
+        
+        scheduler.step()
+
+        total_loss = float(total_loss / len(train_loader))
+        model.eval()
+        ap, map = utils.eval_dataset_map(model, args.device, test_loader)
+        model.train()
+
+        wandb.log({
+            "train_loss": total_loss,
+            "mAP": map,
+            "learning_rate": scheduler.get_last_lr()[0]
+        })
 
         # save model
         if save_this_epoch(args, epoch):
             save_model(epoch, model_name, model)
+    
+    run.finish()
 
     # Validation iteration
     test_loader = utils.get_data_loader('voc', train=False, batch_size=args.test_batch_size, split='test', inp_size=args.inp_size)

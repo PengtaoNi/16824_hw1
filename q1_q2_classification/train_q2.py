@@ -17,7 +17,7 @@ class ResNet(nn.Module):
         ##################################################################
         # TODO: Define a FC layer here to process the features
         ##################################################################
-        pass
+        self.fc = nn.Linear(self.resnet.fc.out_features, num_classes)
         ##################################################################
         #                          END OF YOUR CODE                      #
         ##################################################################
@@ -27,7 +27,10 @@ class ResNet(nn.Module):
         ##################################################################
         # TODO: Return raw outputs here
         ##################################################################
-        pass
+        x = self.resnet(x)
+        x = self.fc(x)
+        
+        return x
         ##################################################################
         #                          END OF YOUR CODE                      #
         ##################################################################
@@ -45,16 +48,16 @@ if __name__ == "__main__":
     # You should experiment and choose the correct hyperparameters
     # You should get a map of around 50 in 50 epochs
     ##################################################################
-    # args = ARGS(
-    #     epochs=50,
-    #     inp_size=64,
-    #     use_cuda=True,
-    #     val_every=70
-    #     lr=# TODO,
-    #     batch_size=#TODO,
-    #     step_size=#TODO,
-    #     gamma=#TODO
-    # )
+    args = ARGS(
+        epochs=50,
+        inp_size=64,
+        use_cuda=True,
+        val_every=70,
+        lr=0.0001, # TODO
+        batch_size=128, # TODO
+        step_size=10, #TODO
+        gamma=0.2, #TODO
+    )
     ##################################################################
     #                          END OF YOUR CODE                      #
     ##################################################################
