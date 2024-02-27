@@ -85,13 +85,14 @@ def create_dataset_and_dataloaders(subset=False):
 
     return train_loader, val_loader, train_dataset, val_dataset
 
-def train_model(detector, train_loader, hyperparams, overfit=False):
+def train_model(detector, train_loader, hyperparams, run, overfit=False):
     device = hyperparams.device
     detector = detector.to(device)
 
     train_detector(
         detector,
         train_loader,
+        run,
         learning_rate=hyperparams.lr,
         max_iters=hyperparams.max_iters,
         log_period=hyperparams.log_period,
@@ -101,7 +102,7 @@ def train_model(detector, train_loader, hyperparams, overfit=False):
     print("Successfully finished training.")
     return
 
-def visualize_gt(train_dataset, val_dataset):
+def visualize_gt(train_dataset, val_dataset, run):
     # writer = SummaryWriter("detection_logs")
     inverse_norm = transforms.Compose(
         [
@@ -124,7 +125,8 @@ def visualize_gt(train_dataset, val_dataset):
     img_grid = make_grid(gt_images, nrow=8)
     # writer.add_image("train/gt_images", img_grid, global_step=idx)
     # writer.close()
-    wandb.log({"train/gt_images", img_grid})
+    img_grid = wandb.Image(img_grid, caption="gt_images")
+    run.log({"train/gt_images": img_grid})
 
 def main(args):
     print("Loading data...")
@@ -162,12 +164,12 @@ def main(args):
 
     if args.visualize_gt:
         print("Visualizing GT...")
-        visualize_gt(train_dataset, val_dataset)        
+        visualize_gt(train_dataset, val_dataset, run)        
         return
     
     print("Training model...")
     if not args.visualize_gt:
-        train_model(detector, train_loader, hyperparams, overfit=args.overfit)
+        train_model(detector, train_loader, hyperparams, run, overfit=args.overfit)
     # print("Training complete! Saving loss curve to loss.png...")
     print("Training complete!")
     if not args.inference:
@@ -195,6 +197,7 @@ def main(args):
             detector,
             small_val_loader,
             val_dataset.idx_to_class,
+            run,
             score_thresh=0.7,
             nms_thresh=0.5,
             device=DEVICE,
@@ -211,6 +214,7 @@ def main(args):
             detector,
             val_loader,
             val_dataset.idx_to_class,
+            run,
             score_thresh=0.4,
             nms_thresh=0.6,
             device=DEVICE,
@@ -227,7 +231,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--visualize_gt", action="store_true")
     parser.add_argument(
-        "--overfit", type=bool, default=True
+        "--overfit", type=bool, default=False
     )
     parser.add_argument(
         "--inference", type=bool, default=False

@@ -16,6 +16,7 @@ from torchvision.utils import make_grid
 from torch.utils.tensorboard import SummaryWriter
 
 from utils.utils import detection_visualizer
+import wandb
 
 class VOC2007DetectionTiny(torch.utils.data.Dataset):
     """
@@ -180,6 +181,7 @@ def infinite_loader(loader):
 def train_detector(
     detector,
     train_loader,
+    run,
     learning_rate: float = 5e-3,
     weight_decay: float = 1e-4,
     max_iters: int = 5000,
@@ -190,7 +192,7 @@ def train_detector(
     """
     Train the detector. We use SGD with momentum and step decay.
     """
-    writer = SummaryWriter("detection_logs")
+    # writer = SummaryWriter("detection_logs")
     detector.to(device=device)
 
     # Optimizer: use SGD with momentum.
@@ -230,17 +232,23 @@ def train_detector(
         total_loss.backward()
         optimizer.step()
         lr_scheduler.step()
-        for key, value in losses.items():
-            writer.add_scalar("train/" + key + "_{}".format("overfit" if overfit else "full"), value, _iter)
+        # for key, value in losses.items():
+        #     writer.add_scalar("train/" + key + "_{}".format("overfit" if overfit else "full"), value, _iter)
         # Print losses periodically.
         if _iter % log_period == 0:
             loss_str = f"[Iter {_iter}][loss: {total_loss:.3f}]"
             for key, value in losses.items():
                 loss_str += f"[{key}: {value:.3f}]"
+                run.log({
+                    key: value
+                })
             print(loss_str)
+            run.log({
+                "loss": total_loss
+            })
             loss_history.append(total_loss.item())
             
-        writer.close()
+        # writer.close()
     print("Finished training, saving model.")
     torch.save(detector.state_dict(), "fcos_detector.pt")
 
@@ -248,6 +256,7 @@ def inference_with_detector(
     detector,
     test_loader,
     idx_to_class,
+    run,
     score_thresh: float,
     nms_thresh: float,
     output_dir: Optional[str] = None,
@@ -345,9 +354,11 @@ def inference_with_detector(
             all_images.append(torch.from_numpy(image))
     
     if output_dir is None:
-        writer=SummaryWriter("detection_logs")
+        # writer=SummaryWriter("detection_logs")
         image_grid = make_grid(all_images, nrow=8)
-        writer.add_image("test_images", image_grid)
-        writer.close()
+        image_grid = wandb.Image(image_grid, caption="gt_images")
+        run.log({"test_images": image_grid})
+        # writer.add_image("test_images", image_grid)
+        # writer.close()
     end_t = time.time()
     print(f"Total inference time: {end_t-start_t:.1f}s")

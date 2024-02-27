@@ -435,10 +435,11 @@ class FCOS(nn.Module):
         # loss_cls, loss_box, loss_ctr = None, None, None
 
         matched_box_cls = matched_gt_boxes[:, :, 4]
-        matched_box_cls[matched_box_cls == -1] = 0
+        bg_mask = matched_box_cls == -1
+        matched_box_cls[bg_mask] = 0
         gt_classes = F.one_hot(matched_box_cls.long(), num_classes=self.num_classes).to(gt_boxes.dtype)
-        gt_classes[matched_box_cls == -1] = 0
-        loss_cls = sigmoid_focal_loss(pred_cls_logits, gt_classes, reduction='none')
+        gt_classes[bg_mask] = 0
+        loss_cls = sigmoid_focal_loss(pred_cls_logits, gt_classes)
         
         pred_boxreg_deltas = pred_boxreg_deltas.view(-1, 4)
         matched_gt_deltas = matched_gt_deltas.view(-1, 4)
@@ -448,7 +449,7 @@ class FCOS(nn.Module):
         pred_ctr_logits = pred_ctr_logits.view(-1)
         gt_ctr = fcos_make_centerness_targets(matched_gt_deltas)
         loss_ctr = F.binary_cross_entropy_with_logits(pred_ctr_logits, gt_ctr, reduction='none')
-        loss_ctr[gt_ctr == -1] = 0.0
+        loss_ctr[gt_ctr <= 0] = 0.0
         ######################################################################
         #                            END OF YOUR CODE                        #
         ######################################################################
@@ -542,21 +543,25 @@ class FCOS(nn.Module):
             level_pred_scores = torch.sqrt(
                 level_cls_logits.sigmoid_() * level_ctr_logits.sigmoid_()
             )
-            # Step 1:
-            # Replace "pass" statement with your code
-            pass
+            level_pred_scores, pred_classes = level_pred_scores.max(dim=1)
             
-            # Step 2:
-            # Replace "pass" statement with your code
-            pass
+            keep_mask = level_pred_scores > test_score_thresh
+            level_pred_classes = pred_classes[keep_mask]
+            level_pred_scores = level_pred_scores[keep_mask]
 
-            # Step 3:
-            # Replace "pass" statement with your code
-            pass
-
-            # Step 4: Use `images` to get (height, width) for clipping.
-            # Replace "pass" statement with your code
-            pass
+            level_pred_boxes = fcos_apply_deltas_to_locations(
+                level_deltas, level_locations,stride=self.backbone.fpn_strides[level_name])
+            level_pred_boxes = level_pred_boxes[keep_mask]
+            
+            fg_mask = (level_deltas[keep_mask].sum(dim=1) != -4)
+            level_pred_scores = level_pred_scores[fg_mask]
+            level_pred_classes = level_pred_classes[fg_mask]
+            
+            level_pred_boxes = level_pred_boxes[fg_mask]
+            level_pred_boxes[:,0] = level_pred_boxes[:,0].clip(min=0)
+            level_pred_boxes[:,1] = level_pred_boxes[:,1].clip(min=0)
+            level_pred_boxes[:,2] = level_pred_boxes[:,2].clip(max=images.shape[2])
+            level_pred_boxes[:,3] = level_pred_boxes[:,3].clip(max=images.shape[3])
 
             ##################################################################
             #                          END OF YOUR CODE                      #

@@ -72,6 +72,13 @@ def train(args, model, optimizer, scheduler=None, model_name='model'):
             ##################################################################
             
             loss.backward()
+
+            for tag, value in model.named_parameters():
+                if value.grad is not None:
+                    run.log({
+                        tag+"/grad": value.grad.cpu().numpy()
+                    })
+
             optimizer.step()
             
         #     if cnt % args.log_every == 0:
@@ -106,7 +113,7 @@ def train(args, model, optimizer, scheduler=None, model_name='model'):
         ap, map = utils.eval_dataset_map(model, args.device, test_loader)
         model.train()
 
-        wandb.log({
+        run.log({
             "train_loss": total_loss,
             "mAP": map,
             "learning_rate": scheduler.get_last_lr()[0]
