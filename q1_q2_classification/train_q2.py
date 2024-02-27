@@ -17,7 +17,8 @@ class ResNet(nn.Module):
         ##################################################################
         # TODO: Define a FC layer here to process the features
         ##################################################################
-        self.resnet.fc = nn.Linear(self.resnet.fc.in_features, num_classes)
+        self.fc = nn.Linear(self.resnet.fc.out_features, num_classes)
+        self.softmax = nn.Softmax(dim=1)
         ##################################################################
         #                          END OF YOUR CODE                      #
         ##################################################################
@@ -28,6 +29,8 @@ class ResNet(nn.Module):
         # TODO: Return raw outputs here
         ##################################################################
         x = self.resnet(x)
+        x = self.fc(x)
+        x = self.softmax(x)
         
         return x
         ##################################################################
@@ -49,7 +52,7 @@ if __name__ == "__main__":
     ##################################################################
     args = ARGS(
         epochs=50,
-        inp_size=64,
+        inp_size=224,
         use_cuda=True,
         val_every=70,
         lr=0.0001, # TODO

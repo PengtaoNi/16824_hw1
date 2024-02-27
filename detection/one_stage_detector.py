@@ -430,13 +430,22 @@ class FCOS(nn.Module):
         # Feel free to delete this line: (but keep variable names same)
         # loss_cls, loss_box, loss_ctr = None, None, None
 
-        gt_classes = matched_gt_boxes[:, :, 4]
+        matched_box_cls = matched_gt_boxes[:, :, 4].view(-1)
+        matched_box_cls = matched_box_cls[matched_box_cls != -1].long()
+        pred_cls_logits = pred_cls_logits.view(-1, self.num_classes)
+        pred_cls_logits = pred_cls_logits[matched_box_cls != -1]
+        gt_classes = F.one_hot(pred_cls_logits, num_classes=self.num_classes)
         loss_cls = sigmoid_focal_loss(pred_cls_logits, gt_classes, reduction='none')
         
-        loss_box = F.l1_loss(pred_boxreg_deltas, matched_gt_deltas, reduction='none').mean()
+        pred_boxreg_deltas = pred_boxreg_deltas.view(-1, 4)
+        matched_gt_deltas = matched_gt_deltas.view(-1, 4)
+        loss_box = 0.25 * F.l1_loss(pred_boxreg_deltas, matched_gt_deltas, reduction='none').mean()
+        loss_box[matched_gt_deltas < 0] = 0.0
 
-        loss_ctr = F.binary_cross_entropy_with_logits(
-            pred_ctr_logits, fcos_make_centerness_targets(matched_gt_deltas), reduction='none')
+        pred_ctr_logits = pred_ctr_logits.view(-1)
+        gt_ctr = fcos_make_centerness_targets(matched_gt_deltas)
+        loss_ctr = F.binary_cross_entropy_with_logits(pred_ctr_logits, gt_ctr, reduction='none')
+        loss_ctr[gt_ctr < 0] = 0.0
         ######################################################################
         #                            END OF YOUR CODE                        #
         ######################################################################
