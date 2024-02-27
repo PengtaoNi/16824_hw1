@@ -285,12 +285,14 @@ def get_fpn_location_coords(
         ######################################################################
         B, C, H, W = feat_shape
 
-        y, x = torch.meshgrid(torch.arange(H, dtype=dtype, device=device),
-                              torch.arange(W, dtype=dtype, device=device), indexing='xy')
-        y = (y + 0.5) * level_stride
+        x, y = torch.meshgrid(torch.arange(W, dtype=dtype, device=device),
+                              torch.arange(H, dtype=dtype, device=device), indexing='xy')
         x = (x + 0.5) * level_stride
+        y = (y + 0.5) * level_stride
+        x = x.unsqueeze(dim=-1)
+        y = y.unsqueeze(dim=-1)
 
-        coords = torch.stack([x, y], dim=2).reshape(-1, 2)
+        coords = torch.cat((x, y), dim=2).view(-1, 2)
         location_coords[level_name] = coords
         ######################################################################
         #                             END OF YOUR CODE                       #

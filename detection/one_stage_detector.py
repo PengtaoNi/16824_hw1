@@ -359,7 +359,7 @@ class FCOS(nn.Module):
         # Feel free to delete this line: (but keep variable names same)
         locations_per_fpn_level = get_fpn_location_coords(
             {key: feature.shape for key, feature in backbone_feats.items()},
-            self.backbone.fpn_strides()
+            self.backbone.fpn_strides, device=images.device
         )
         ######################################################################
         #                           END OF YOUR CODE                         #
@@ -386,19 +386,23 @@ class FCOS(nn.Module):
         # boxes for locations per FPN level, per image. Fill this list:
         matched_gt_boxes = []
         for gt in gt_boxes:
-            matched_boxes = fcos_match_locations_to_gt(locations_per_fpn_level, gt)
-            matched_gt_boxes.append(matched_boxes)
+            matched_box = fcos_match_locations_to_gt(
+                locations_per_fpn_level, self.backbone.fpn_strides, gt)
+            matched_gt_boxes.append(matched_box)
 
         # Calculate GT deltas for these matched boxes. Similar structure
         # as `matched_gt_boxes` above. Fill this list:
         matched_gt_deltas = []
         # Replace "pass" statement with your code        
-        for gt in gt_boxes:
-            matched_deltas = {key: fcos_get_deltas_from_locations(value, gt[:, :4], stride) \
-                              for key, value, stride in zip(locations_per_fpn_level.keys(),
-                                                            matched_boxes.values(),
-                                                            self.backbone.fpn_strides().values())}
-            matched_gt_deltas.append(matched_deltas)
+        for i in range(len(gt_boxes)):
+            matched_delta = {}
+            for level, locations in locations_per_fpn_level.items():
+                matched_delta[level] = fcos_get_deltas_from_locations(
+                    locations,
+                    matched_gt_boxes[i][level],
+                    self.backbone.fpn_strides[level]
+                )
+            matched_gt_deltas.append(matched_delta)
         ######################################################################
         #                           END OF YOUR CODE                         #
         ######################################################################
@@ -430,22 +434,21 @@ class FCOS(nn.Module):
         # Feel free to delete this line: (but keep variable names same)
         # loss_cls, loss_box, loss_ctr = None, None, None
 
-        matched_box_cls = matched_gt_boxes[:, :, 4].view(-1)
-        matched_box_cls = matched_box_cls[matched_box_cls != -1].long()
-        pred_cls_logits = pred_cls_logits.view(-1, self.num_classes)
-        pred_cls_logits = pred_cls_logits[matched_box_cls != -1]
-        gt_classes = F.one_hot(pred_cls_logits, num_classes=self.num_classes)
+        matched_box_cls = matched_gt_boxes[:, :, 4]
+        matched_box_cls[matched_box_cls == -1] = 0
+        gt_classes = F.one_hot(matched_box_cls.long(), num_classes=self.num_classes).to(gt_boxes.dtype)
+        gt_classes[matched_box_cls == -1] = 0
         loss_cls = sigmoid_focal_loss(pred_cls_logits, gt_classes, reduction='none')
         
         pred_boxreg_deltas = pred_boxreg_deltas.view(-1, 4)
         matched_gt_deltas = matched_gt_deltas.view(-1, 4)
-        loss_box = 0.25 * F.l1_loss(pred_boxreg_deltas, matched_gt_deltas, reduction='none').mean()
-        loss_box[matched_gt_deltas < 0] = 0.0
+        loss_box = 0.25 * F.l1_loss(pred_boxreg_deltas, matched_gt_deltas, reduction='none')
+        loss_box[matched_gt_deltas == -1] = 0.0
 
         pred_ctr_logits = pred_ctr_logits.view(-1)
         gt_ctr = fcos_make_centerness_targets(matched_gt_deltas)
         loss_ctr = F.binary_cross_entropy_with_logits(pred_ctr_logits, gt_ctr, reduction='none')
-        loss_ctr[gt_ctr < 0] = 0.0
+        loss_ctr[gt_ctr == -1] = 0.0
         ######################################################################
         #                            END OF YOUR CODE                        #
         ######################################################################
