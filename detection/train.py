@@ -20,7 +20,7 @@ from dataclasses import dataclass
 import os
 import matplotlib.pyplot as plt
 import torch
-from torch.utils.tensorboard import SummaryWriter
+# from torch.utils.tensorboard import SummaryWriter
 import torchvision.transforms as transforms
 from torchvision.utils import make_grid
 
@@ -28,6 +28,7 @@ from detection_helper import train_detector, inference_with_detector
 from detection_helper import VOC2007DetectionTiny
 from one_stage_detector import FCOS
 from utils.utils import detection_visualizer
+import wandb
 
 if torch.cuda.is_available():
     print("Good to go!")
@@ -101,7 +102,7 @@ def train_model(detector, train_loader, hyperparams, overfit=False):
     return
 
 def visualize_gt(train_dataset, val_dataset):
-    writer = SummaryWriter("detection_logs")
+    # writer = SummaryWriter("detection_logs")
     inverse_norm = transforms.Compose(
         [
             transforms.Normalize(mean=[0., 0., 0.], std=[1 / 0.229, 1 / 0.224, 1 / 0.225]),
@@ -121,8 +122,9 @@ def visualize_gt(train_dataset, val_dataset):
         gt_images.append(torch.from_numpy(img))
     
     img_grid = make_grid(gt_images, nrow=8)
-    writer.add_image("train/gt_images", img_grid, global_step=idx)
-    writer.close()
+    # writer.add_image("train/gt_images", img_grid, global_step=idx)
+    # writer.close()
+    wandb.log({"train/gt_images", img_grid})
 
 def main(args):
     print("Loading data...")
@@ -148,6 +150,14 @@ def main(args):
         num_classes=NUM_CLASSES,
         fpn_channels=64,
         stem_channels=[64, 64],
+    )
+
+    wandb.login(key="67e677676d60bdb2e9b198f36f6b1f34f9c565de")
+    run = wandb.init(
+        name = 'q3',
+        reinit = True,
+        project = "16824_hw1",
+        config = args
     )
 
     if args.visualize_gt:
@@ -209,6 +219,8 @@ def main(args):
         )
         os.system("cd mAP && python main.py")
         print("Output file written to ./mAP/output/mAP.png")
+    
+    run.finish()
         
 
 if __name__ == '__main__':
